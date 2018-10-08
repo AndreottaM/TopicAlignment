@@ -35,11 +35,11 @@ lapply(datafiles, function(x){
     ) %>%
     ungroup() %>%
     mutate(vol = if_else(topicinbatch == 1, endbreak, endbreak - lag(endbreak))) %>% #volume of tweets in each topic
-    select(-topicinbatch) %>%
+    select(-topicinbatch, -endbreak) %>%
     return()
 }) %>%
   {do.call(rbind, .)} %>% #bind all dataframes for all k together
-  write_delim(path = paste0(datapath, "data.csv"), delim = ",")
+  write_delim(path = paste0(datapath, "rawdata.csv"), delim = ",")
 
 
 
