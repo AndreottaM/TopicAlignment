@@ -359,7 +359,7 @@ ui <- fluidPage(
         c("5 Topics/Batch" = "5",
           "10 Topics/Batch" = "10",
           "20 Topics/Batch" = "20"),
-        selected = "10"
+        selected = "5"
       ),
       
       #Input: Slider for the number of groups to consider
@@ -374,8 +374,8 @@ ui <- fluidPage(
       sliderTextInput("threshold",
                       label = "Minimum criteria for matching topics :",
                       grid = TRUE,
-                      choices = as.character(thresholds*10),
-                      selected = as.character(thresholds[3]*10)
+                      choices = as.character(thresholds),
+                      selected = as.character(thresholds[3])
       ),
       
       #Saving external file options
@@ -409,8 +409,8 @@ ui <- fluidPage(
       
     mainPanel(
       tabsetPanel(type = "tabs",
-                  tabPanel("Topics", DT::dataTableOutput(outputId = "topicTable"))#,
-                  #tabPanel("Similarity between topics", plotOutput(outputId = "topicSims"), DT::dataTableOutput(outputId = "topicSimsTable")),
+                  tabPanel("Topics", DT::dataTableOutput(outputId = "topicTable")),
+                  tabPanel("Similarity between topics", plotOutput(outputId = "topicSims"), DT::dataTableOutput(outputId = "topicSimsTable"))#,
                   #tabPanel("Grouping of topics across batches", plotOutput(outputId = "topicImage")),
                   #tabPanel("Keywords in each grouping", DT::dataTableOutput(outputId = "groupTable"))
       )
@@ -418,11 +418,17 @@ ui <- fluidPage(
   )
 )
 server <- function(input, output) {
-
+  k <- reactive(as.numeric(input$kselect))
+  sim.samebatch <- reactiveVal(l.sim.same[[k]])
+  sim.diffbatch <- reactiveVal(as.matrix(l.sim[[k]]) - as.matrix(l.sim.same[[k]])) #requires diag to be 0
+  
+  
+  
+  
   output$topicTable <- DT::renderDataTable({
     #Renders a datatable of topics and keywords
     df.t %>%
-      filter(topicsperbatch == as.numeric(input$k.select)) %>%
+      filter(topicsperbatch == k) %>%
       rowwise() %>%
       mutate(keywords = paste(strsplit(keywords, '|', fixed = T)[[1]], collapse = " ", sep = " ")) %>%
       ungroup %>%
@@ -430,7 +436,19 @@ server <- function(input, output) {
       DT::datatable(rowname = F, options = list(pageLength = as.numeric(input$k.select)))
   })
   
-  
+  output$topicSims <- renderPlot({
+    diag(sim.diffbatch()) <- 0
+    
+    hist(unlist(sim.samebatch()), col = rgb(0,0,1,1/4),
+         main = "Histogram of topic similarities",
+         xlab = "Number of similar keywords",
+         breaks = seq(0, dim(kw[[1]])[[2]], by = 1)
+    )
+    hist(dfstore$S[[r()]][[2]] * dim(kw[[1]])[[2]], col = rgb(1,0,0,1/4),
+         breaks = seq(0, dim(kw[[1]])[[2]], by = 1),
+         add = T)  # second
+    legend("topright", c("Topics from same model", "Topics from different models"), col=c(rgb(1,0,0,1/4), rgb(0,0,1,1/4)), lwd=10)
+  })
   
 }
 # Run the application 
