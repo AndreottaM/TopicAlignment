@@ -15,11 +15,9 @@ library(DT)
 ###
 #Code takes a while to run, interim output is saved to improve rerun speeds
 clear.sim <- F #change to T to delete saved similarity calculations
-clear.samesim <- F #change to T to delete saved same-batch similarity calculations
 clear.group <- F #change to T to delete saved grouping calculations
 datapath <- "../out/" #path to saved calculations
 name.sim <- "similarity_k"
-name.samesim <- "similarity_samebatch_k"
 name.group <- "group_k"
 
 #Function for clearing files
@@ -301,45 +299,6 @@ df.g<- #df.t %>%
   {do.call(rbind, .)} %>%
   invisible()
 
-####Segmenting similarity structure for shiny app
-#For each topics/batch, identify the similarity between topics of the same batch and
-#topics from different batches
-segmentsimilarity_samebatch <- function(s, k){
-  #For similarity matrix s and topics/batch k, remove similarties from other batches
-  #Also removes similarity with topic itself
-  #Check for saved data
-  output <- retrieve_interimdata(name.samesim, k, T)
-  if(is.tibble(output)){
-    #Then computation is already completed and stored
-    return(as.matrix(output))
-  }
-  output <- s
-  for (i in 1:dim(s)[2]){
-    for(j in 1:dim(s)[2]){
-    output[i,j] <- df.t %>%
-          filter(topicsperbatch == k) %>%
-          filter(topic == i | topic == j) %>%
-          pull(batch) %>%
-          {ifelse(anyDuplicated(.) > 0, as.matrix(s[i,j]), 0)}
-    }
-  }
-  write_delim(as.data.frame(output), path = paste0(datapath, name.samesim, as.character(k), '.csv'), delim = ",")
-  return(output)
-}
-
-l.sim.same <- df.t %>% 
-  summarise(max(topicsperbatch)) %>% 
-  pull %>% 
-  {vector("list", .)}
-#df.t %>% 
-#  pull(topicsperbatch) %>% 
-#  unique %>%
-  5 %>%
-  lapply(function(x){l.sim.same[[x]] <<- segmentsimilarity_samebatch(l.sim[[x]], x)}) %>%
-  invisible() #hides output
-
-
-
 
 ####Shiny App to display groupings
 
@@ -362,14 +321,6 @@ ui <- fluidPage(
         selected = "5"
       ),
       
-      #Input: Slider for the number of groups to consider
-      sliderInput("group",
-                  label = "Number of groups:",
-                  min = 1,
-                  max = 40,
-                  step = 1,
-                  value = 10),
-
       #Input: Numeric for the threshold of classifying two topics as similar
       sliderTextInput("threshold",
                       label = "Minimum criteria for matching topics :",
@@ -377,6 +328,14 @@ ui <- fluidPage(
                       choices = as.character(thresholds),
                       selected = as.character(thresholds[3])
       ),
+      
+      #Input: Slider for the number of groups to consider
+      sliderInput("group",
+                  label = "Number of groups:",
+                  min = 1,
+                  max = 40,
+                  step = 1,
+                  value = 10),
       
       #Saving external file options
       #Input: Save groupings
@@ -410,45 +369,30 @@ ui <- fluidPage(
     mainPanel(
       tabsetPanel(type = "tabs",
                   tabPanel("Topics", DT::dataTableOutput(outputId = "topicTable")),
-                  tabPanel("Similarity between topics", plotOutput(outputId = "topicSims"), DT::dataTableOutput(outputId = "topicSimsTable"))#,
-                  #tabPanel("Grouping of topics across batches", plotOutput(outputId = "topicImage")),
+                  tabPanel("Grouping of topics across batches", plotOutput(outputId = "topicImage"))#,
                   #tabPanel("Keywords in each grouping", DT::dataTableOutput(outputId = "groupTable"))
       )
     )
   )
 )
 server <- function(input, output) {
-  k <- reactive(as.numeric(input$kselect))
-  sim.samebatch <- reactiveVal(l.sim.same[[k]])
-  sim.diffbatch <- reactiveVal(as.matrix(l.sim[[k]]) - as.matrix(l.sim.same[[k]])) #requires diag to be 0
-  
-  
-  
-  
-  output$topicTable <- DT::renderDataTable({
-    #Renders a datatable of topics and keywords
-    df.t %>%
-      filter(topicsperbatch == k) %>%
-      rowwise() %>%
-      mutate(keywords = paste(strsplit(keywords, '|', fixed = T)[[1]], collapse = " ", sep = " ")) %>%
-      ungroup %>%
-      select(-topicsperbatch) %>%
-      DT::datatable(rowname = F, options = list(pageLength = as.numeric(input$k.select)))
+
+  output$topicTable <- DT::renderDataTable({ 
+    #Renders a datatable of topics and keywords 
+    df.t %>% 
+      filter(topicsperbatch == as.numeric(input$k.select)) %>% 
+      rowwise() %>% 
+      mutate(keywords = paste(strsplit(keywords, '|', fixed = T)[[1]], collapse = " ", sep = " ")) %>% 
+      ungroup %>% 
+      select(-topicsperbatch) %>% 
+      DT::datatable(rowname = F, options = list(pageLength = as.numeric(input$k.select))) 
   })
   
-  output$topicSims <- renderPlot({
-    diag(sim.diffbatch()) <- 0
+  
+  output$topicImage <- renderPlot({
     
-    hist(unlist(sim.samebatch()), col = rgb(0,0,1,1/4),
-         main = "Histogram of topic similarities",
-         xlab = "Number of similar keywords",
-         breaks = seq(0, dim(kw[[1]])[[2]], by = 1)
-    )
-    hist(dfstore$S[[r()]][[2]] * dim(kw[[1]])[[2]], col = rgb(1,0,0,1/4),
-         breaks = seq(0, dim(kw[[1]])[[2]], by = 1),
-         add = T)  # second
-    legend("topright", c("Topics from same model", "Topics from different models"), col=c(rgb(1,0,0,1/4), rgb(0,0,1,1/4)), lwd=10)
   })
+  
   
 }
 # Run the application 
