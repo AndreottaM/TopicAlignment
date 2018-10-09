@@ -1,5 +1,8 @@
 #Packages
 library(tidyverse)
+library(shinyWidgets)
+library(DT)
+
 
 #Code is based on Chuang's algorithm, but instead of cosine similarity of topic words, we use keywords.
 #First calculate similarity between topics
@@ -130,7 +133,7 @@ l.sim <- df.t %>%
 df.t %>% 
   pull(topicsperbatch) %>% 
   unique %>%
-  lapply(function(x){l.sim[[x]] <- calculate_similaritymatrix(x)}) %>%
+  lapply(function(x){l.sim[[x]] <<- calculate_similaritymatrix(x)}) %>%
   invisible() #hides output
 
 ####Functions for aligning each topic
@@ -141,6 +144,11 @@ thresholds = seq(0.1, 1, by = 0.1) #above (or equal to) which topics are similar
 detect_mostsimilar <- function(g, s, t){
   #Function takes dataframe of groupings (see calculate_grouping) and corresponding similarity matrix to detect most similar topic to t
   #In cases with ties, selects the lowest value of t
+  #Firstly, if all similarity scores are 0, return NA
+  tol <- 1e-10
+  if(!any(s[ , t] > 0 + tol)){
+    return(NA)
+  }
   #add relevant similarity scores to g
   g.classed <- g %>%
     filter(topic == t) %>%
@@ -157,9 +165,11 @@ detect_mostsimilar <- function(g, s, t){
   g.valid <- g %>%
     mutate(sim = s[ , t]) %>%
     filter(!(group %in% gnum))
+  #if no valid comparisons, return NA
+  if(nrow(g.valid) == 0){return(NA)}
   #maximum similarity
   s.max <- g.valid %>%
-    summarise(max(sim)) %>%
+    summarise(max(sim, na.rm = T)) %>%
     pull
   g.valid %>%
     filter(sim == s.max) %>%
@@ -168,15 +178,14 @@ detect_mostsimilar <- function(g, s, t){
     return()
 }
 
-detect_incompatgrouping <- function(tg, b, df){
-  #takes grouping of topics, tg, and assesses whether it is incompatible (T) for a batch b, indicated by df
-  df %>%
-    filter(topic %in% tg) %>%
+detect_incompatgrouping <- function(g1, g2, df){
+  #takes two groups (g1, g2) from df and checks for incompatability (return T if yes)
+  df %>%  
+    filter(group %in% c(g1,g2)) %>%
     pull(batch) %>%
-    {(b %in% .)} %>%
-    return
+    anyDuplicated() > 0 %>%
+    return()
 }
-
 
 calculate_grouping <- function(k){
   #calculates alignment of N topics from topicsperbatch k, using a threshold t
@@ -205,7 +214,7 @@ calculate_grouping <- function(k){
   
   #2. Begin merging loops until no valid groupings remain
   maxsim <- df.r %>%
-    summarise(max(closeness)) %>%
+    summarise(max(closeness, na.rm = T)) %>%
     pull
   tol <- 1e-10 #tolerance for comparison of doubles
   next.logging <- length(thresholds) #next index of thresholds to be logged in results tibble
@@ -213,6 +222,7 @@ calculate_grouping <- function(k){
   while(maxsim >= (thresholds[1] - tol)){
     i<-i+1
     print(i)
+    browser(expr = (i == 160))
     while(maxsim < (thresholds[next.logging] - tol)){
       #write results to df.r
       groupname <- paste0('G', as.character(next.logging))
@@ -254,39 +264,141 @@ calculate_grouping <- function(k){
     df.s[t.grouped[-1], ] <- 0
     #Update locations
     df.r <- df.r %>%
-       rowwise %>%
-       mutate(location = if_else(topic == t.grouped[1], detect_mostsimilar(df.r, df.s, topic),
-                                if_else((location %in% t.grouped)||(t.grouped %in% location), 
-                                        if_else(detect_incompatgrouping(t.grouped, batch, df.r), detect_mostsimilar(df.r, df.s, topic), t.grouped[1]),
-                                        location))) %>%
-       mutate(closeness = if_else(group == g.remain, 
-                                  if_else(topic == t.grouped[1], df.s[topic, location], 0), 
-                                  if_else(detect_incompatgrouping(t.grouped, batch, df.r), df.s[topic, location], closeness))) %>%
-       ungroup
+      rowwise %>%
+      mutate(location = if_else(group == g.remain,
+                                if_else(topic == t.grouped[1], as.integer(detect_mostsimilar(df.r,df.s,topic)), as.integer(NA)),
+                                if_else(detect_incompatgrouping(g.remain, group, df.r), as.integer(detect_mostsimilar(df.r,df.s,topic)),
+                                        if_else(location %in% t.grouped, t.grouped[1], location))
+            )) %>%      
+      mutate(closeness = if_else(group == g.remain, 
+                                  if_else(topic == t.grouped[1], df.s[topic, location], as.double(0)), 
+                                  if_else(detect_incompatgrouping(g.remain, group, df.r), df.s[topic, location], closeness))) %>%
+      ungroup
     #Recalculate maxsim
     maxsim <- df.r %>%
-      summarise(max(closeness)) %>%
+      summarise(max(closeness, na.rm=T)) %>%
       pull
     if(is.na(maxsim)){break}
   }
   groupname <- paste0('G', as.character(next.logging))
   df.r <- df.r %>%
     mutate(!!groupname := group) %>%
-    select(-c(location, closeness))
+    select(-c(location, closeness, group))
   write_delim(as.data.frame(df.r), path = paste0(datapath, name.group, as.character(k), '.csv'), delim = ",")
   df.r %>% return()
 }
 
-dft2<- df.t %>% 
-  pull(topicsperbatch) %>% 
-  unique %>%
-  sort %>%
+df.g<- #df.t %>% 
+  #pull(topicsperbatch) %>% 
+  #unique %>%
+  #sort %>%
+  5 %>%
   lapply(function(x){
     calculate_grouping(x) %>%
       return()}) %>%
   {do.call(rbind, .)} %>%
   invisible()
 
-#error @ i = 133, batch = 23, topics 111, 115; groups 109 and 35 about to be merged
+
+
+
+
+####Shiny App to display groupings
+
+# Define UI
+ui <- fluidPage(
+  titlePanel("Topic alignment using single-linkage clustering"),
+  
+  #Sidebar layout with input and output definitions ----
+  sidebarLayout(
+    
+    #Sidebar panel for inputs ----
+    sidebarPanel(
+      
+      #Input: Which modelling approach?
+      radioButtons(
+        inputId = "k.select", label = "Select modelling approach:",
+        c("5 Topics/Batch" = "5",
+          "10 Topics/Batch" = "10",
+          "20 Topics/Batch" = "20"),
+        selected = "10"
+      ),
+      
+      #Input: Slider for the number of groups to consider
+      sliderInput("group",
+                  label = "Number of groups:",
+                  min = 1,
+                  max = 40,
+                  step = 1,
+                  value = 10),
+
+      #Input: Numeric for the threshold of classifying two topics as similar
+      sliderTextInput("threshold",
+                      label = "Minimum criteria for matching topics :",
+                      grid = TRUE,
+                      choices = as.character(thresholds*10),
+                      selected = as.character(thresholds[3]*10)
+      ),
+      
+      #Saving external file options
+      #Input: Save groupings
+      actionButton("saveButton", "Save output"),
+      
+      ###Display options
+      #Input: Slider for the number of keywords to display
+      sliderInput("keywordsNum",
+                  label = "Number of keywords for groups:",
+                  min = 1,
+                  max = 10,
+                  step = 1,
+                  value = 10),
+      
+      #Input: Display option - keyword grouping options
+      materialSwitch(
+        inputId = "keywordsDisp",
+        label = "Display only keywords in all topics of a group",
+        status = "danger",
+        value = FALSE
+      ),
+      
+      #Input: Button for showing tabular options
+      materialSwitch(
+        inputId = "show.model",
+        label = "Show topics and models in table of groups",
+        status = "danger",
+        value = FALSE
+      )),
+      
+    mainPanel(
+      tabsetPanel(type = "tabs",
+                  tabPanel("Topics", DT::dataTableOutput(outputId = "topicTable"))#,
+                  #tabPanel("Similarity between topics", plotOutput(outputId = "topicSims"), DT::dataTableOutput(outputId = "topicSimsTable")),
+                  #tabPanel("Grouping of topics across batches", plotOutput(outputId = "topicImage")),
+                  #tabPanel("Keywords in each grouping", DT::dataTableOutput(outputId = "groupTable"))
+      )
+    )
+  )
+)
+server <- function(input, output) {
+
+  output$topicTable <- DT::renderDataTable({
+    #Renders a datatable of topics and keywords
+    df.t %>%
+      filter(topicsperbatch == as.numeric(input$k.select)) %>%
+      rowwise() %>%
+      mutate(keywords = paste(strsplit(keywords, '|', fixed = T)[[1]], collapse = " ", sep = " ")) %>%
+      ungroup %>%
+      select(-topicsperbatch) %>%
+      DT::datatable(rowname = F, options = list(pageLength = as.numeric(input$k.select)))
+  })
+  
+  
+  
+}
+# Run the application 
+shinyApp(ui = ui, server = server)
+
+
+
 
 
