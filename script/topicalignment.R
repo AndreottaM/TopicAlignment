@@ -15,9 +15,11 @@ library(DT)
 ###
 #Code takes a while to run, interim output is saved to improve rerun speeds
 clear.sim <- F #change to T to delete saved similarity calculations
+clear.samesim <- F #change to T to delete saved same-batch similarity calculations
 clear.group <- F #change to T to delete saved grouping calculations
 datapath <- "../out/" #path to saved calculations
 name.sim <- "similarity_k"
+name.samesim <- "similarity_samebatch_k"
 name.group <- "group_k"
 
 #Function for clearing files
@@ -199,8 +201,8 @@ calculate_grouping <- function(k){
   }
   #1. initialise data
   #similarity matrix, each element represents sim(topic(i), topic(j)) from modelling of k
-  df.s <- read.delim(paste0(datapath, name.sim, as.character(k), '.csv'), sep = ",", stringsAsFactors = F) %>%
-    as.matrix()
+  df.s <- l.sim[[k]] %>%
+    as.matrix
   #results and pointers of towards nearest neighbours (nearest topic (location) at similarity of (closeness))
   df.r <- df.t %>%
     filter(topicsperbatch == k) %>%
@@ -299,6 +301,42 @@ df.g<- #df.t %>%
   {do.call(rbind, .)} %>%
   invisible()
 
+####Segmenting similarity structure for shiny app
+#For each topics/batch, identify the similarity between topics of the same batch and
+#topics from different batches
+segmentsimilarity_samebatch <- function(s, k){
+  #For similarity matrix s and topics/batch k, remove similarties from other batches
+  #Also removes similarity with topic itself
+  #Check for saved data
+  output <- retrieve_interimdata(name.samesim, k, T)
+  if(is.tibble(output)){
+    #Then computation is already completed and stored
+    return(as.matrix(output))
+  }
+  output <- s
+  for (i in 1:dim(s)[2]){
+    for(j in 1:dim(s)[2]){
+    output[i,j] <- df.t %>%
+          filter(topicsperbatch == k) %>%
+          filter(topic == i | topic == j) %>%
+          pull(batch) %>%
+          {ifelse(anyDuplicated(.) > 0, as.matrix(s[i,j]), 0)}
+    }
+  }
+  write_delim(as.data.frame(output), path = paste0(datapath, name.samesim, as.character(k), '.csv'), delim = ",")
+  return(output)
+}
+
+l.sim.same <- df.t %>% 
+  summarise(max(topicsperbatch)) %>% 
+  pull %>% 
+  {vector("list", .)}
+#df.t %>% 
+#  pull(topicsperbatch) %>% 
+#  unique %>%
+  5 %>%
+  lapply(function(x){l.sim.same[[x]] <<- segmentsimilarity_samebatch(l.sim[[x]], x)}) %>%
+  invisible() #hides output
 
 
 
