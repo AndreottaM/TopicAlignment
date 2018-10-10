@@ -1,5 +1,6 @@
 #Packages
 library(tidyverse)
+library(shiny)
 library(shinyWidgets)
 library(DT)
 
@@ -262,7 +263,7 @@ calculate_grouping <- function(k){
     #Remove unneeded rows
     df.s[ , t.grouped[-1]] <- 0
     df.s[t.grouped[-1], ] <- 0
-    #Update locations
+    #Update locations + respective closeness
     df.r <- df.r %>%
       rowwise %>%
       mutate(location = if_else(group == g.remain,
@@ -317,8 +318,7 @@ ui <- fluidPage(
         inputId = "k.select", label = "Select modelling approach:",
         c("5 Topics/Batch" = "5",
           "10 Topics/Batch" = "10",
-          "20 Topics/Batch" = "20"),
-        selected = "5"
+          "20 Topics/Batch" = "20")
       ),
       
       #Input: Numeric for the threshold of classifying two topics as similar
@@ -368,24 +368,62 @@ ui <- fluidPage(
       
     mainPanel(
       tabsetPanel(type = "tabs",
+                  tabPanel("Debug", textOutput(outputId = "textTest"), dataTableOutput(outputId = "tableTest")),
                   tabPanel("Topics", DT::dataTableOutput(outputId = "topicTable")),
-                  tabPanel("Grouping of topics across batches", plotOutput(outputId = "topicImage"))#,
-                  #tabPanel("Keywords in each grouping", DT::dataTableOutput(outputId = "groupTable"))
+                  tabPanel("Grouping of topics across batches", plotOutput(outputId = "topicImage")),
+                  tabPanel("Keywords in each grouping", DT::dataTableOutput(outputId = "groupTable"))
       )
     )
   )
 )
 server <- function(input, output) {
+  gvals <- reactiveValues() #dataframes of group data (topics has rows = topics; groups has rows = groups)
+  gpara <- reactiveValues(k = 0, g = 0, t = 0) #holds parameters for grouping, includes topicsperbatch (k), number of groups (g), and threshold (th)
+  
+  observe({
+    #Register parameters
+    gpara$k <- as.numeric(input$k.select)
+    gpara$g <- as.numeric(input$group)
+    gpara$t <- as.numeric(input$threshold)
+  })
+
+  observe({
+    #Watch for changes in grouping criteria & update dataframe of topics
+    #Similar structure to df.t, but contains relevant group
+    tol <- 1e-10 #tolerance for comparisons
+    groupname <- paste0('G', which(abs(thresholds - gpara$t) < tol))
+    gvals$topics <- df.g %>%
+      filter(topicsperbatch == gpara$k) %>%
+      mutate(group = !!as.name(groupname)) %>%
+      select(-matches('^G', ignore.case = F))
+    #Vars = group, number of topics in group, vol of tweets
+    #Arranged by descending number of topics in each group.
+    #Groups tied are then arranged by descending volume of tweets
+    gvals$groups <- gvals$topics %>%
+      group_by(group) %>%
+      summarise_at(vars(group,vol), funs(length, sum)) %>%
+      ungroup %>%
+      select(-c(vol_length,group_sum)) %>%
+      rename(totaltopic = group_length, totalvol = vol_sum) %>%
+      arrange(desc(totalvol), by_group = totaltopic)
+    #From gvals$groups, select top gpara$g groups
+    #0 denotes grouping will not be extracted
+    gvals$groups <- isolate(gvals$groups) %>%
+      mutate(extract = c(seq(1:gpara$g), rep(0, nrow(isolate(gvals$groups)) - gpara$g)))
+  })
+  
+  output$textTest <- renderText({as.character(gpara$k)})
+  output$tableTest <- renderDataTable({gvals$groups})
 
   output$topicTable <- DT::renderDataTable({ 
     #Renders a datatable of topics and keywords 
     df.t %>% 
-      filter(topicsperbatch == as.numeric(input$k.select)) %>% 
+      filter(topicsperbatch == k()) %>% 
       rowwise() %>% 
       mutate(keywords = paste(strsplit(keywords, '|', fixed = T)[[1]], collapse = " ", sep = " ")) %>% 
       ungroup %>% 
       select(-topicsperbatch) %>% 
-      DT::datatable(rowname = F, options = list(pageLength = as.numeric(input$k.select))) 
+      DT::datatable(rowname = F, options = list(pageLength = k())) 
   })
   
   
