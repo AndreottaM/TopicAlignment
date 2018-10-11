@@ -221,9 +221,6 @@ calculate_grouping <- function(k){
   next.logging <- length(thresholds) #next index of thresholds to be logged in results tibble
   i<-0
   while(maxsim >= (thresholds[1] - tol)){
-    i<-i+1
-    print(i)
-    browser(expr = (i == 160))
     while(maxsim < (thresholds[next.logging] - tol)){
       #write results to df.r
       groupname <- paste0('G', as.character(next.logging))
@@ -289,16 +286,16 @@ calculate_grouping <- function(k){
   df.r %>% return()
 }
 
-df.g<- #df.t %>% 
-  #pull(topicsperbatch) %>% 
-  #unique %>%
-  #sort %>%
-  5 %>%
-  lapply(function(x){
-    calculate_grouping(x) %>%
-      return()}) %>%
-  {do.call(rbind, .)} %>%
-  invisible()
+# df.g <- df.t %>%
+#   pull(topicsperbatch) %>%
+#   unique %>%
+#   lapply(function(x){
+#     calculate_grouping(x) %>%
+#       return()}) %>%
+#       {do.call(rbind, .)} %>%
+#   invisible()
+
+df.g <- calculate_grouping(5)
 
 
 ####Shiny App to display groupings
@@ -379,7 +376,7 @@ ui <- fluidPage(
 server <- function(input, output) {
   gvals <- reactiveValues() #dataframes of group data (topics has rows = topics; groups has rows = groups)
   gpara <- reactiveValues(k = 0, g = 0, t = 0) #holds parameters for grouping, includes topicsperbatch (k), number of groups (g), and threshold (th)
-  
+
   observe({
     #Register parameters
     gpara$k <- as.numeric(input$k.select)
@@ -413,25 +410,58 @@ server <- function(input, output) {
   })
   
   output$textTest <- renderText({as.character(gpara$k)})
-  output$tableTest <- renderDataTable({gvals$groups})
+  output$tableTest <- renderDataTable({})
 
   output$topicTable <- DT::renderDataTable({ 
     #Renders a datatable of topics and keywords 
-    df.t %>% 
-      filter(topicsperbatch == k()) %>% 
+    gvals$topics %>% 
       rowwise() %>% 
       mutate(keywords = paste(strsplit(keywords, '|', fixed = T)[[1]], collapse = " ", sep = " ")) %>% 
       ungroup %>% 
       select(-topicsperbatch) %>% 
-      DT::datatable(rowname = F, options = list(pageLength = k())) 
+      DT::datatable(rowname = F, options = list(pageLength = gpara$k)) 
   })
-  
   
   output$topicImage <- renderPlot({
-    
-  })
-  
-  
+    #initialise disp, where each row is an extracted grouping and each column is a batch
+    #elements code presence of group in batch (1 if present, 0 if not)
+    disp <- sapply(sort(unique(gvals$topics$batch)), function(x){
+        gvals$groups %>%
+          filter(extract > 0) %>%
+          pull(group) %>%
+          sapply(function(y){
+            gvals$topics %>%
+              filter(topicsperbatch == 5) %>%
+              filter(batch == x) %>%
+              filter(group == y) %>%
+              nrow() %>%
+              return()
+          }) %>%
+          return()
+      })
+    #to each column, add blank space, and indicate the presence of 'ungrouped' topics (i.e., grouped topics not extracted)
+    disp <- disp %>%
+      apply(2, function(x){c(rep(-1, gpara$k - sum(x)), rep(0, sum(x)))}) %>%
+      {rbind(disp, .)}
+    #Use image function to draw grid of disp
+    #Data wrangle with disp
+    disp <- apply(disp, 2, rev)
+    #Set coordinates for axis labels
+    x1 <- 0.5;
+    x2 <- dim(disp)[2] + 0.5;
+    y1 <- 0.5;
+    y2 <- dim(disp)[1] + 0.5;
+    #Set colours
+    if(any(gvals$groups$extract > 0)){colscheme <- c(326, 1, 509)}
+    else(colscheme <- c(1, 509))
+    image(1:dim(disp)[2], 1:dim(disp)[1],
+          t(disp),
+          xlab = 'Batch', xlim = c(x1,x2), xaxp = c(x1 + 0.5 , x2 - 0.5 , x2 - x1 - 1),
+          ylab = 'Aligned topics', yaxt = 'n',
+          col = colors()[colscheme])
+    axis(2, at = (gpara$k + 1):(gpara$g + gpara$k), labels = (gpara$g):1)
+    abline(h=y1:y2, v=x1:x2, col='gray', lty=3)
+    })
 }
 # Run the application 
 shinyApp(ui = ui, server = server)
