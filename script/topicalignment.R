@@ -221,6 +221,7 @@ calculate_grouping <- function(k){
   next.logging <- length(thresholds) #next index of thresholds to be logged in results tibble
   i<-0
   while(maxsim >= (thresholds[1] - tol)){
+
     while(maxsim < (thresholds[next.logging] - tol)){
       #write results to df.r
       groupname <- paste0('G', as.character(next.logging))
@@ -228,6 +229,8 @@ calculate_grouping <- function(k){
         mutate(!!groupname := group)
       next.logging <- next.logging - 1
     }
+    i <- i + 1
+    browser()
     #whilst largest similarity exceeds threshold, there are topics that may be aligned
     #find information of most similar pairing (if ties, selected the topic corresponding with the smallest number)
     detail <- df.r %>%
@@ -445,7 +448,7 @@ server <- function(input, output) {
       ungroup %>%
       select(-c(vol_length,group_sum)) %>%
       rename(totaltopic = group_length, totalvol = vol_sum) %>%
-      arrange(desc(totalvol), by_group = totaltopic)
+      arrange(desc(totaltopic), by_group = desc(totalvol))
     #From gvals$groups, select top gpara$g groups
     #0 denotes grouping will not be extracted
     gvals$groups <- isolate(gvals$groups) %>%
@@ -467,14 +470,10 @@ server <- function(input, output) {
       group_by(keywords,group) %>%
       summarise(sum_keywords = table(keywords)) %>%
       ungroup %>%
+      left_join(select(res$topics, c(group, totaltopic)), by = "group") %>%
+      distinct %>%
       group_by(group) %>%
-      mutate(prop_keywords = sum_keywords/sum(sum_keywords))
-    # res$groups <- res$topics %>%
-    #   group_by(extract) %>%
-    #   mutate(aligned_topic = paste0(topic, collapse = " ")) %>%
-    #   mutate(aligned_batch = paste0(batch, collapse = " ")) %>%
-    #   select(aligned_batch, aligned_topic)
-    #
+      mutate(prop_keywords = sum_keywords/totaltopic)
     #Filter out keywords where prop < prop_threshold
     df.filterkw <- res$keywords %>%
       filter(prop_keywords >= (rpara$kw - tol)) %>%
@@ -496,7 +495,7 @@ server <- function(input, output) {
   })
   
   output$textTest <- renderText({as.character(rpara$showunext)})
-  output$tableTest <- renderDataTable({res$groups})
+  output$tableTest <- renderDataTable({res$keywords})
 
   output$topicTable <- DT::renderDataTable({ 
     #Renders a datatable of topics and keywords 
@@ -554,7 +553,7 @@ server <- function(input, output) {
     #display parameters
     disp.cols <- c(T, T, rpara$showvol, rpara$showvol, rpara$showunext, rpara$showtopic, rpara$showbatch, rpara$showkw)
     res$groups %>%
-      arrange(desc(totalvol), by_group = totaltopic) %>%
+      arrange(desc(totaltopic), by_group = desc(totalvol)) %>%
       rowwise %>%
       mutate(vol_prop = specify_decimal(vol_prop,4)*100) %>%
       ungroup %>%
@@ -564,7 +563,6 @@ server <- function(input, output) {
       .[ , disp.cols] %>%
       datatable(rowname = F, colnames = subset(c("Grouping ID", "Topics in Group", "Volume of tweets", "Volume of Tweets (%)", "Extraction ID", "Aligned Topics", "Batches with a topic in this grouping", "Prominent Keywords"), subset = disp.cols),
                 options = list(pageLength = gpara$g))
-    
   })
 }
 # Run the application 

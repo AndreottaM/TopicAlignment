@@ -6,3 +6,7 @@ data/rawtweet_5000_K20\.csv
 data/rawtweet_5000_K5\.csv
 
 script/\.Rhistory
+
+script/shinyapp\.nb\.html
+
+script/shinyapp\.Rmd
