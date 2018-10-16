@@ -37,7 +37,7 @@ if(clear.group){clear_files(datapath, name.group)}
 ##########
 
 #General functions
-specify_decimal <- function(x, k) trimws(format(round(x, k), nsmall=k)) #rounds decimal number x to k decimal places
+specify_decimal <- function(x, k) as.numeric(trimws(format(round(x, k), nsmall=k))) #rounds decimal number x to k decimal places
 
 #Data
 df.t <- read.delim("../data/rawdata.csv", sep = ",", stringsAsFactors = F) %>%
@@ -347,28 +347,62 @@ ui <- fluidPage(
                   step = 1,
                   value = 10),
       
-      #Input: Display option - keyword grouping options
+      #Input: Display option
+      sliderTextInput("propthresh",
+                      label = "Proportion of times a keyword must occur in aligned topics to be displayed in summary",
+                      grid = TRUE,
+                      choices = as.character(seq(0, 1, by = 0.05)),
+                      selected = 0.5
+      ),
+      
+      #Input: Button for sdisplay of columns in summary
       materialSwitch(
-        inputId = "keywordsDisp",
-        label = "Display only keywords in all topics of a group",
+        inputId = "show.kw",
+        label = "Show keywords in summary",
+        status = "danger",
+        value = T
+      ),
+      
+      #Input: Button for display of columns in summary
+      materialSwitch(
+        inputId = "show.topic",
+        label = "Show topics in summary",
         status = "danger",
         value = FALSE
       ),
       
-      #Input: Button for showing tabular options
+      #Input: Button for display of columns in summary
       materialSwitch(
-        inputId = "show.model",
-        label = "Show topics and models in table of groups",
+        inputId = "show.batch",
+        label = "Show batches in summary",
         status = "danger",
         value = FALSE
-      )),
+      ),
+      
+      #Input: Button for display of columns in summary
+      materialSwitch(
+        inputId = "show.vol",
+        label = "Show volume in summary",
+        status = "danger",
+        value = T
+      ),
+      
+      #Input: Button for display of rows in summary
+      materialSwitch(
+        inputId = "show.unextracted",
+        label = "Show unextracted in summary",
+        status = "danger",
+        value = F
+      )
+      
+      ),
       
     mainPanel(
       tabsetPanel(type = "tabs",
                   tabPanel("Debug", textOutput(outputId = "textTest"), dataTableOutput(outputId = "tableTest")),
                   tabPanel("Topics", DT::dataTableOutput(outputId = "topicTable")),
-                  tabPanel("Grouping of topics across batches", plotOutput(outputId = "topicImage")),
-                  tabPanel("Keywords in each grouping", DT::dataTableOutput(outputId = "groupTable"))
+                  tabPanel("Alignment of topics across batches", plotOutput(outputId = "topicImage")),
+                  tabPanel("Summary of aligned topics", DT::dataTableOutput(outputId = "groupTable"))
       )
     )
   )
@@ -376,12 +410,21 @@ ui <- fluidPage(
 server <- function(input, output) {
   gvals <- reactiveValues() #dataframes of group data (topics has rows = topics; groups has rows = groups)
   gpara <- reactiveValues(k = 0, g = 0, t = 0) #holds parameters for grouping, includes topicsperbatch (k), number of groups (g), and threshold (th)
-
+  res <- reactiveValues() #results: table of grouped topics & summary of extracted groups & summary of keywords in each group
+  rpara <- reactiveValues() #parameters of results summary: kw is the proportional threshold above which keywords are shown
+  #show indicates the display of topics/models in summary table
+  
   observe({
     #Register parameters
     gpara$k <- as.numeric(input$k.select)
     gpara$g <- as.numeric(input$group)
     gpara$t <- as.numeric(input$threshold)
+    rpara$kw <- as.numeric(input$propthresh)
+    rpara$showbatch <- input$show.batch
+    rpara$showkw <- input$show.kw
+    rpara$showvol <- input$show.vol
+    rpara$showtopic <- input$show.topic
+    rpara$showunext <- input$show.unextracted
   })
 
   observe({
@@ -409,8 +452,51 @@ server <- function(input, output) {
       mutate(extract = c(seq(1:gpara$g), rep(0, nrow(isolate(gvals$groups)) - gpara$g)))
   })
   
-  output$textTest <- renderText({as.character(gpara$k)})
-  output$tableTest <- renderDataTable({})
+  observe({
+    tol <- 1e-10
+    res$topics <- gvals$topics %>%
+      left_join(gvals$groups, by = "group")
+    res$keywords <- res$topics %>%
+      rowwise %>%
+      mutate(keyword.num = length(unlist(strsplit(keywords,"|", fixed = T)))) %>%
+      ungroup %>%
+      separate(keywords, into = paste0("kw", 1:max(.$keyword.num)), sep =  "[|]") %>%
+      group_by(group) %>%
+      gather(key, keywords, starts_with("kw")) %>%
+      select(-key) %>%
+      group_by(keywords,group) %>%
+      summarise(sum_keywords = table(keywords)) %>%
+      ungroup %>%
+      group_by(group) %>%
+      mutate(prop_keywords = sum_keywords/sum(sum_keywords))
+    # res$groups <- res$topics %>%
+    #   group_by(extract) %>%
+    #   mutate(aligned_topic = paste0(topic, collapse = " ")) %>%
+    #   mutate(aligned_batch = paste0(batch, collapse = " ")) %>%
+    #   select(aligned_batch, aligned_topic)
+    #
+    #Filter out keywords where prop < prop_threshold
+    df.filterkw <- res$keywords %>%
+      filter(prop_keywords >= (rpara$kw - tol)) %>%
+      group_by(group) %>%
+      select(group,keywords) %>%
+      mutate(keywords = paste0(keywords, collapse = " ")) %>%
+      distinct() %>%
+      ungroup()
+    res$groups <- res$topics %>%
+       group_by(group) %>%
+       mutate(aligned_topic = paste0(topic, collapse = " ")) %>%
+       mutate(aligned_batch = paste0(batch, collapse = " ")) %>%
+      select(-c(topic, batch, keywords, vol)) %>%
+      distinct() %>%
+      rowwise %>%
+      mutate(vol_prop = totalvol/sum(.$totalvol)) %>%
+      ungroup %>%
+      left_join(df.filterkw, by = "group")
+  })
+  
+  output$textTest <- renderText({as.character(rpara$showunext)})
+  output$tableTest <- renderDataTable({res$groups})
 
   output$topicTable <- DT::renderDataTable({ 
     #Renders a datatable of topics and keywords 
@@ -462,6 +548,24 @@ server <- function(input, output) {
     axis(2, at = (gpara$k + 1):(gpara$g + gpara$k), labels = (gpara$g):1)
     abline(h=y1:y2, v=x1:x2, col='gray', lty=3)
     })
+  
+  output$groupTable <- DT::renderDataTable({
+    #Renders data table summarising groups, which of these are extracted, and the alignment of topics and batches
+    #display parameters
+    disp.cols <- c(T, T, rpara$showvol, rpara$showvol, rpara$showunext, rpara$showtopic, rpara$showbatch, rpara$showkw)
+    res$groups %>%
+      arrange(desc(totalvol), by_group = totaltopic) %>%
+      rowwise %>%
+      mutate(vol_prop = specify_decimal(vol_prop,4)*100) %>%
+      ungroup %>%
+      filter(extract > as.integer(-1*as.integer(rpara$showunext))) %>% #workaround, couldnt get ifelse to combine with filters
+      select(-topicsperbatch) %>%
+      select(group, totaltopic, totalvol, vol_prop, extract, aligned_topic, aligned_batch, keywords) %>%
+      .[ , disp.cols] %>%
+      datatable(rowname = F, colnames = subset(c("Grouping ID", "Topics in Group", "Volume of tweets", "Volume of Tweets (%)", "Extraction ID", "Aligned Topics", "Batches with a topic in this grouping", "Prominent Keywords"), subset = disp.cols),
+                options = list(pageLength = gpara$g))
+    
+  })
 }
 # Run the application 
 shinyApp(ui = ui, server = server)
