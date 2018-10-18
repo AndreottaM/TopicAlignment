@@ -229,8 +229,7 @@ calculate_grouping <- function(k){
         mutate(!!groupname := group)
       next.logging <- next.logging - 1
     }
-    i <- i + 1
-    browser()
+
     #whilst largest similarity exceeds threshold, there are topics that may be aligned
     #find information of most similar pairing (if ties, selected the topic corresponding with the smallest number)
     detail <- df.r %>%
@@ -238,6 +237,8 @@ calculate_grouping <- function(k){
       slice(1)
     #group remaining
     g.remain <- pull(detail, group)
+    
+    i <- i + 1
     #Merge both groups
     g.merging <- df.r %>%
       filter(topic == pull(detail, location)) %>%
@@ -493,6 +494,13 @@ server <- function(input, output) {
       ungroup %>%
       left_join(df.filterkw, by = "group")
   })
+  
+  observeEvent(input$saveButton, {
+    isolate(res$topics) %>%
+      as.data.frame() %>%
+      write_delim(path = paste0(datapath, "output", as.character(gpara$k), '.csv'))
+  })
+  
   
   output$textTest <- renderText({as.character(rpara$showunext)})
   output$tableTest <- renderDataTable({res$keywords})

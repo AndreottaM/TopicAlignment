@@ -10,3 +10,25 @@ script/\.Rhistory
 script/shinyapp\.nb\.html
 
 script/shinyapp\.Rmd
+
+data/groupIDs\.txt
+
+data/rawdataIDs-group\.csv
+
+data/results21March\.csv
+
+data/topic-occurence\.csv
+
+data/tweetClimate\.csv
+
+doc/issuesreport-2018OCT16\.docx
+
+out/output5\.csv
+
+script/\.RData
+
+script/datawrangle_withIDs-quick\.R
+
+script/postgroupwrangle\.R
+
+script/datawrangle_withIDs\.R
