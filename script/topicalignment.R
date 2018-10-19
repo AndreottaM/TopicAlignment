@@ -142,8 +142,9 @@ df.t %>%
 thresholds = seq(0.1, 1, by = 0.1) #above (or equal to) which topics are similar, below which are too dissimilar to be grouped
 
 #Detect minimum between two columns of different groups
-detect_mostsimilar <- function(g, s, t){
+detect_mostsimilar <- function(g, s, t, func.med, th.med){
   #Function takes dataframe of groupings (see calculate_grouping) and corresponding similarity matrix to detect most similar topic to t
+  #also input var: func & th, see calculate_grouping
   #In cases with ties, selects the lowest value of t
   #Firstly, if all similarity scores are 0, return NA
   tol <- 1e-10
@@ -166,8 +167,34 @@ detect_mostsimilar <- function(g, s, t){
   g.valid <- g %>%
     mutate(sim = s[ , t]) %>%
     filter(!(group %in% gnum))
+  
   #if no valid comparisons, return NA
   if(nrow(g.valid) == 0){return(NA)}
+  #if func=median, then only consider groups where median > threshold
+  if(func.med){
+    if(th.med >= 0 - tol){
+    #topics in group to-be-merged
+    compar_t <- g %>%
+      filter(group == g.classed) %>%
+      pull(topic)
+    #calculate if median similarity between each topic of to-be-merged group with all topics from potential group > threshold
+    k <- g.valid %>%
+      pull(topicsperbatch) %>%
+      unique() #number of topics per batch
+    g.valid <- g.valid %>% 
+      group_by(group) %>% 
+      mutate(med = 
+               l.sim[[k]][compar_t, topic] %>% 
+               unlist %>%
+               #median) %>%
+               mean) %>%
+      filter(med >= th.med-tol) %>%
+      ungroup %>%
+      select(-med) #calculates median
+    #Check if any valid groups remain
+    if(nrow(g.valid) == 0){return(NA)}
+    }
+  }
   #maximum similarity
   s.max <- g.valid %>%
     summarise(max(sim, na.rm = T)) %>%
@@ -188,16 +215,22 @@ detect_incompatgrouping <- function(g1, g2, df){
     return()
 }
 
-calculate_grouping <- function(k){
+calculate_grouping <- function(k, func.med, th.med){
   #calculates alignment of N topics from topicsperbatch k, using a threshold t
   #at most, there exists N distinct groups of topics, at minimum, there exists k groups of topics
   #using SLINK algorithm of single-link clustering
+  #func is optional output to add further constraints to grouping"
+  #if missing, no constraints
+  #if T, ensures topic is only grouped if the median similarity between topic and grouped topics >= threshold
   #Check if data already exists
   dat.res <- retrieve_interimdata(name.group, k, T)
   if(is.tibble(dat.res)){
     #Then computation has already been completed
     return(dat.res)
   }
+  if(missing(func.med)){func.med <- F}
+  if(missing(th.med)){th.med <- 0}
+  
   #1. initialise data
   #similarity matrix, each element represents sim(topic(i), topic(j)) from modelling of k
   df.s <- l.sim[[k]] %>%
@@ -209,7 +242,7 @@ calculate_grouping <- function(k){
     mutate(group = topic)
   df.r <- df.r %>%
     rowwise %>%
-    mutate(location = detect_mostsimilar(df.r, df.s, topic)) %>%
+    mutate(location = detect_mostsimilar(df.r, df.s, topic, func.med, th.med)) %>%
     mutate(closeness = df.s[topic, location]) %>%
     ungroup
   
@@ -267,10 +300,10 @@ calculate_grouping <- function(k){
     #Update locations + respective closeness
     df.r <- df.r %>%
       rowwise %>%
-      mutate(location = if_else(group == g.remain,
-                                if_else(topic == t.grouped[1], as.integer(detect_mostsimilar(df.r,df.s,topic)), as.integer(NA)),
-                                if_else(detect_incompatgrouping(g.remain, group, df.r), as.integer(detect_mostsimilar(df.r,df.s,topic)),
-                                        if_else(location %in% t.grouped, t.grouped[1], location))
+      mutate(location = ifelse(group == g.remain,
+                                ifelse(topic == t.grouped[1], as.integer(detect_mostsimilar(df.r,df.s,topic,func.med, th.med)), as.integer(NA)),
+                                ifelse(detect_incompatgrouping(g.remain, group, df.r), as.integer(detect_mostsimilar(df.r,df.s,topic,func.med,th.med)),
+                                        ifelse(location %in% t.grouped, t.grouped[1], location))
             )) %>%      
       mutate(closeness = if_else(group == g.remain, 
                                   if_else(topic == t.grouped[1], df.s[topic, location], as.double(0)), 
@@ -286,34 +319,37 @@ calculate_grouping <- function(k){
   df.r <- df.r %>%
     mutate(!!groupname := group) %>%
     select(-c(location, closeness, group))
+  #for remaining thresholds, there are no solutions - allocate NA to each group to indicate process has terminated
+  if(next.logging > 1){
+    newcol <- rep(as.integer(NA_character_), next.logging - 1)
+    names(newcol) <- paste0('G', 1:(next.logging - 1))
+    df.r <- mutate(df.r, !!! newcol)
+  }
   write_delim(as.data.frame(df.r), path = paste0(datapath, name.group, as.character(k), '.csv'), delim = ",")
   df.r %>% return()
 }
 
-# df.g <- df.t %>%
-#   pull(topicsperbatch) %>%
-#   unique %>%
-#   lapply(function(x){
-#     calculate_grouping(x) %>%
-#       return()}) %>%
-#       {do.call(rbind, .)} %>%
-#   invisible()
+df.g <- df.t %>%
+  pull(topicsperbatch) %>%
+  unique %>%
+  lapply(function(x){
+    calculate_grouping(x, T, 0.3) %>%
+      return()}) %>%
+      {do.call(rbind, .)} %>%
+  invisible()
 
-df.g <- calculate_grouping(5)
-
-
-####Shiny App to display groupings
+###Shiny App to display groupings
 
 # Define UI
 ui <- fluidPage(
   titlePanel("Topic alignment using single-linkage clustering"),
-  
+
   #Sidebar layout with input and output definitions ----
   sidebarLayout(
-    
+
     #Sidebar panel for inputs ----
     sidebarPanel(
-      
+
       #Input: Which modelling approach?
       radioButtons(
         inputId = "k.select", label = "Select modelling approach:",
@@ -321,7 +357,7 @@ ui <- fluidPage(
           "10 Topics/Batch" = "10",
           "20 Topics/Batch" = "20")
       ),
-      
+
       #Input: Numeric for the threshold of classifying two topics as similar
       sliderTextInput("threshold",
                       label = "Minimum criteria for matching topics :",
@@ -329,7 +365,7 @@ ui <- fluidPage(
                       choices = as.character(thresholds),
                       selected = as.character(thresholds[3])
       ),
-      
+
       #Input: Slider for the number of groups to consider
       sliderInput("group",
                   label = "Number of groups:",
@@ -337,11 +373,11 @@ ui <- fluidPage(
                   max = 40,
                   step = 1,
                   value = 10),
-      
+
       #Saving external file options
       #Input: Save groupings
       actionButton("saveButton", "Save output"),
-      
+
       ###Display options
       #Input: Slider for the number of keywords to display
       sliderInput("keywordsNum",
@@ -350,7 +386,7 @@ ui <- fluidPage(
                   max = 10,
                   step = 1,
                   value = 10),
-      
+
       #Input: Display option
       sliderTextInput("propthresh",
                       label = "Proportion of times a keyword must occur in aligned topics to be displayed in summary",
@@ -358,7 +394,7 @@ ui <- fluidPage(
                       choices = as.character(seq(0, 1, by = 0.05)),
                       selected = 0.5
       ),
-      
+
       #Input: Button for sdisplay of columns in summary
       materialSwitch(
         inputId = "show.kw",
@@ -366,7 +402,7 @@ ui <- fluidPage(
         status = "danger",
         value = T
       ),
-      
+
       #Input: Button for display of columns in summary
       materialSwitch(
         inputId = "show.topic",
@@ -374,7 +410,7 @@ ui <- fluidPage(
         status = "danger",
         value = FALSE
       ),
-      
+
       #Input: Button for display of columns in summary
       materialSwitch(
         inputId = "show.batch",
@@ -382,7 +418,7 @@ ui <- fluidPage(
         status = "danger",
         value = FALSE
       ),
-      
+
       #Input: Button for display of columns in summary
       materialSwitch(
         inputId = "show.vol",
@@ -390,7 +426,7 @@ ui <- fluidPage(
         status = "danger",
         value = T
       ),
-      
+
       #Input: Button for display of rows in summary
       materialSwitch(
         inputId = "show.unextracted",
@@ -398,15 +434,15 @@ ui <- fluidPage(
         status = "danger",
         value = F
       )
-      
+
       ),
-      
+
     mainPanel(
       tabsetPanel(type = "tabs",
                   tabPanel("Debug", textOutput(outputId = "textTest"), dataTableOutput(outputId = "tableTest")),
                   tabPanel("Topics", DT::dataTableOutput(outputId = "topicTable")),
                   tabPanel("Alignment of topics across batches", plotOutput(outputId = "topicImage")),
-                  tabPanel("Summary of aligned topics", DT::dataTableOutput(outputId = "groupTable"))
+                  tabPanel("Summary of aligned topics", textOutput(outputId = "groupText"), DT::dataTableOutput(outputId = "groupTable"))
       )
     )
   )
@@ -417,7 +453,7 @@ server <- function(input, output) {
   res <- reactiveValues() #results: table of grouped topics & summary of extracted groups & summary of keywords in each group
   rpara <- reactiveValues() #parameters of results summary: kw is the proportional threshold above which keywords are shown
   #show indicates the display of topics/models in summary table
-  
+
   observe({
     #Register parameters
     gpara$k <- as.numeric(input$k.select)
@@ -455,7 +491,7 @@ server <- function(input, output) {
     gvals$groups <- isolate(gvals$groups) %>%
       mutate(extract = c(seq(1:gpara$g), rep(0, nrow(isolate(gvals$groups)) - gpara$g)))
   })
-  
+
   observe({
     tol <- 1e-10
     res$topics <- gvals$topics %>%
@@ -494,27 +530,27 @@ server <- function(input, output) {
       ungroup %>%
       left_join(df.filterkw, by = "group")
   })
-  
+
   observeEvent(input$saveButton, {
     isolate(res$topics) %>%
       as.data.frame() %>%
-      write_delim(path = paste0(datapath, "output", as.character(gpara$k), '.csv'))
+      write_delim(path = paste0(datapath, "output_k", as.character(gpara$k), '.csv'), delim = ",")
   })
-  
-  
-  output$textTest <- renderText({as.character(rpara$showunext)})
-  output$tableTest <- renderDataTable({res$keywords})
 
-  output$topicTable <- DT::renderDataTable({ 
-    #Renders a datatable of topics and keywords 
-    gvals$topics %>% 
-      rowwise() %>% 
-      mutate(keywords = paste(strsplit(keywords, '|', fixed = T)[[1]], collapse = " ", sep = " ")) %>% 
-      ungroup %>% 
-      select(-topicsperbatch) %>% 
-      DT::datatable(rowname = F, options = list(pageLength = gpara$k)) 
+
+  output$textTest <- renderText({as.character(rpara$showunext)})
+  output$tableTest <- renderDataTable({res$groups})
+
+  output$topicTable <- DT::renderDataTable({
+    #Renders a datatable of topics and keywords
+    gvals$topics %>%
+      rowwise() %>%
+      mutate(keywords = paste(strsplit(keywords, '|', fixed = T)[[1]], collapse = " ", sep = " ")) %>%
+      ungroup %>%
+      select(-topicsperbatch) %>%
+      DT::datatable(rowname = F, options = list(pageLength = gpara$k))
   })
-  
+
   output$topicImage <- renderPlot({
     #initialise disp, where each row is an extracted grouping and each column is a batch
     #elements code presence of group in batch (1 if present, 0 if not)
@@ -555,7 +591,7 @@ server <- function(input, output) {
     axis(2, at = (gpara$k + 1):(gpara$g + gpara$k), labels = (gpara$g):1)
     abline(h=y1:y2, v=x1:x2, col='gray', lty=3)
     })
-  
+
   output$groupTable <- DT::renderDataTable({
     #Renders data table summarising groups, which of these are extracted, and the alignment of topics and batches
     #display parameters
@@ -572,8 +608,23 @@ server <- function(input, output) {
       datatable(rowname = F, colnames = subset(c("Grouping ID", "Topics in Group", "Volume of tweets", "Volume of Tweets (%)", "Extraction ID", "Aligned Topics", "Batches with a topic in this grouping", "Prominent Keywords"), subset = disp.cols),
                 options = list(pageLength = gpara$g))
   })
+  
+  output$groupText <- renderText({
+    sumtab <- res$groups %>%
+      group_by(ex = extract > 0) %>%
+      summarise_at(vars(totalvol, vol_prop), funs(sum)) %>%
+      ungroup
+    sprintf('Extracted groupings of topics account for %d (%.2f%%) tweets in the corpus, whereas %d (%.2f%%) are not regarded as aligned with other topics.',
+            pull(filter(sumtab, ex==T), totalvol),
+            pull(filter(sumtab, ex==T), vol_prop) %>%
+              specify_decimal(4)*100,
+            pull(filter(sumtab, ex==F), totalvol),
+            pull(filter(sumtab, ex==F), vol_prop) %>%
+              specify_decimal(4)*100
+            )
+      })
 }
-# Run the application 
+# Run the application
 shinyApp(ui = ui, server = server)
 
 
