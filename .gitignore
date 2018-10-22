@@ -38,3 +38,7 @@ out/group_k5\.csv
 output5\.csv
 
 script/matchTopicToID\.R
+
+data/data-IDs\.csv
+
+issuesreport-2018OCT16\.docx

@@ -142,7 +142,7 @@ df.t %>%
 thresholds = seq(0.1, 1, by = 0.1) #above (or equal to) which topics are similar, below which are too dissimilar to be grouped
 
 #Detect minimum between two columns of different groups
-detect_mostsimilar <- function(g, s, t, func.med, th.med){
+detect_mostsimilar <- function(g, s, t, func.me, th.me){
   #Function takes dataframe of groupings (see calculate_grouping) and corresponding similarity matrix to detect most similar topic to t
   #also input var: func & th, see calculate_grouping
   #In cases with ties, selects the lowest value of t
@@ -170,9 +170,9 @@ detect_mostsimilar <- function(g, s, t, func.med, th.med){
   
   #if no valid comparisons, return NA
   if(nrow(g.valid) == 0){return(NA)}
-  #if func=median, then only consider groups where median > threshold
-  if(func.med){
-    if(th.med >= 0 - tol){
+  #if func.me == T, then only consider groups where mean > threshold
+  if(func.me){
+    if(th.me >= 0 - tol){
     #topics in group to-be-merged
     compar_t <- g %>%
       filter(group == g.classed) %>%
@@ -183,14 +183,14 @@ detect_mostsimilar <- function(g, s, t, func.med, th.med){
       unique() #number of topics per batch
     g.valid <- g.valid %>% 
       group_by(group) %>% 
-      mutate(med = 
+      mutate(me = 
                l.sim[[k]][compar_t, topic] %>% 
                unlist %>%
                #median) %>%
                mean) %>%
-      filter(med >= th.med-tol) %>%
+      filter(me >= th.me-tol) %>%
       ungroup %>%
-      select(-med) #calculates median
+      select(-me) #calculates mean
     #Check if any valid groups remain
     if(nrow(g.valid) == 0){return(NA)}
     }
@@ -215,7 +215,7 @@ detect_incompatgrouping <- function(g1, g2, df){
     return()
 }
 
-calculate_grouping <- function(k, func.med, th.med){
+calculate_grouping <- function(k, func.me, th.me){
   #calculates alignment of N topics from topicsperbatch k, using a threshold t
   #at most, there exists N distinct groups of topics, at minimum, there exists k groups of topics
   #using SLINK algorithm of single-link clustering
@@ -228,8 +228,8 @@ calculate_grouping <- function(k, func.med, th.med){
     #Then computation has already been completed
     return(dat.res)
   }
-  if(missing(func.med)){func.med <- F}
-  if(missing(th.med)){th.med <- 0}
+  if(missing(func.me)){func.me <- F}
+  if(missing(th.me)){th.me <- 0}
   
   #1. initialise data
   #similarity matrix, each element represents sim(topic(i), topic(j)) from modelling of k
@@ -242,7 +242,7 @@ calculate_grouping <- function(k, func.med, th.med){
     mutate(group = topic)
   df.r <- df.r %>%
     rowwise %>%
-    mutate(location = detect_mostsimilar(df.r, df.s, topic, func.med, th.med)) %>%
+    mutate(location = detect_mostsimilar(df.r, df.s, topic, func.me, th.me)) %>%
     mutate(closeness = df.s[topic, location]) %>%
     ungroup
   
@@ -301,8 +301,8 @@ calculate_grouping <- function(k, func.med, th.med){
     df.r <- df.r %>%
       rowwise %>%
       mutate(location = ifelse(group == g.remain,
-                                ifelse(topic == t.grouped[1], as.integer(detect_mostsimilar(df.r,df.s,topic,func.med, th.med)), as.integer(NA)),
-                                ifelse(detect_incompatgrouping(g.remain, group, df.r), as.integer(detect_mostsimilar(df.r,df.s,topic,func.med,th.med)),
+                                ifelse(topic == t.grouped[1], as.integer(detect_mostsimilar(df.r,df.s,topic,func.me, th.me)), as.integer(NA)),
+                                ifelse(detect_incompatgrouping(g.remain, group, df.r), as.integer(detect_mostsimilar(df.r,df.s,topic,func.me,th.me)),
                                         ifelse(location %in% t.grouped, t.grouped[1], location))
             )) %>%      
       mutate(closeness = if_else(group == g.remain, 
@@ -335,8 +335,7 @@ df.g <- df.t %>%
   lapply(function(x){
     calculate_grouping(x, T, 0.3) %>%
       return()}) %>%
-      {do.call(rbind, .)} %>%
-  invisible()
+      {do.call(rbind, .)}
 
 ###Shiny App to display groupings
 
@@ -560,7 +559,7 @@ server <- function(input, output) {
           pull(group) %>%
           sapply(function(y){
             gvals$topics %>%
-              filter(topicsperbatch == 5) %>%
+              filter(topicsperbatch == gpara$k) %>%
               filter(batch == x) %>%
               filter(group == y) %>%
               nrow() %>%
