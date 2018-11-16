@@ -504,7 +504,7 @@ server <- function(input, output) {
       gather(key, keywords, starts_with("kw")) %>%
       select(-key) %>%
       group_by(keywords,group) %>%
-      summarise(sum_keywords = table(keywords)) %>%
+      summarise(sum_keywords = table(keywords, useNA = "ifany")) %>%
       ungroup %>%
       left_join(select(res$topics, c(group, totaltopic)), by = "group") %>%
       distinct %>%
@@ -519,13 +519,14 @@ server <- function(input, output) {
       distinct() %>%
       ungroup()
     res$groups <- res$topics %>%
+       # select(-extract) %>%
        group_by(group) %>%
        mutate(aligned_topic = paste0(topic, collapse = " ")) %>%
        mutate(aligned_batch = paste0(batch, collapse = " ")) %>%
       select(-c(topic, batch, keywords, vol)) %>%
       distinct() %>%
       rowwise %>%
-      mutate(vol_prop = totalvol/sum(.$totalvol)) %>%
+      mutate(vol_prop = totalvol/sum(.$totalvol, na.rm = T)) %>%
       ungroup %>%
       left_join(df.filterkw, by = "group")
   })
@@ -538,7 +539,7 @@ server <- function(input, output) {
 
 
   output$textTest <- renderText({as.character(rpara$showunext)})
-  output$tableTest <- renderDataTable({res$groups})
+  output$tableTest <- renderDataTable({res$topics})
 
   output$topicTable <- DT::renderDataTable({
     #Renders a datatable of topics and keywords
@@ -569,7 +570,7 @@ server <- function(input, output) {
       })
     #to each column, add blank space, and indicate the presence of 'ungrouped' topics (i.e., grouped topics not extracted)
     disp <- disp %>%
-      apply(2, function(x){c(rep(-1, gpara$k - sum(x)), rep(0, sum(x)))}) %>%
+      apply(2, function(x){c(rep(-1, gpara$k - sum(x, na.rm = T)), rep(0, sum(x, na.rm = T)))}) %>%
       {rbind(disp, .)}
     #Use image function to draw grid of disp
     #Data wrangle with disp
