@@ -53,10 +53,10 @@ Lastly, the final tab "Summary of aligned topics" presents a tabulated summary o
 
 The proportion of the corpus covered by extracted groupings is indicated above the table in a sentence form.
 
-![](img/tab/3_1.PNG)
+![](img/tab3_1.PNG)
 
-![](img/tab/3_3.PNG)
+![](img/tab3_3.PNG)
 
 A variety of display options exist for users wishing to see more information (see below). Users can hide the keyword and volume columns of the table by switching off the corresponding buttons. Users wishing to see the specific topics aligned can activate the button: "Show topics in summary". Users can view the batches which correspond to a given grouping by activating "Show batches in summary". Lastly, users can view the results of all groupings (including ones classified as unextracted) by activating the "Show unextracted in summary" button. This option adds an "Extraction ID" to the table, where alignments are given the ID corresponding to the figure on the second tab. Unextracted alignments are allocated an ID of 0.
 
-![](img/tab/3_2.PNG)
+![](img/tab3_2.PNG)
