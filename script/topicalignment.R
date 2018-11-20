@@ -378,13 +378,13 @@ ui <- fluidPage(
       actionButton("saveButton", "Save output"),
 
       ###Display options
-      #Input: Slider for the number of keywords to display
-      sliderInput("keywordsNum",
-                  label = "Number of keywords for groups:",
-                  min = 1,
-                  max = 10,
-                  step = 1,
-                  value = 10),
+      # #Input: Slider for the number of keywords to display
+      # sliderInput("keywordsNum",
+      #             label = "Number of keywords for groups:",
+      #             min = 1,
+      #             max = 10,
+      #             step = 1,
+      #             value = 10),
 
       #Input: Display option
       sliderTextInput("propthresh",

@@ -35,6 +35,28 @@ Xie, Y. (2018). DT: A Wrapper of the JavaScript Library 'DataTables'. R package 
 
 **/script** contains two scripts. First, *topicalignment.R* is used to detect the similarities between topics (though, these can be manually entered as .csv in **/out**), group topics according to levels of similarity (these results are stored in **/out**), and deploy an Shiny App to explore/refine results. The second script is *extractIDs.R*, demonstrating how Andreotta et al. extracted tweets from each group of topics. The data file of tweet IDs is not provided due to ethical obligations.
 
-**/out** contains .csv of similarity matrices (for each *topicsperbatch*) and .csv output for topic alignment algorithm (for each *topicsperbatch*). The topic alignment output is structured as */data/rawdata.csv*, with the addition of extra columns equivalent to various thresholds (see script). Lastly, **/out** contains the output files from the Shiny App (e.g., *output_k5*). The Shiny App is used to extract groups of topics satisfying certain criteria (see below), and classify the remaining groups as 'ungrouped'. The file is structured as */data/rawdata.csv* with the addition of an *extract* variable denoting each topic's group membership
+**/out** contains .csv of similarity matrices (for each *topicsperbatch*) and .csv output for topic alignment algorithm (for each *topicsperbatch*). The topic alignment output is structured as */data/rawdata.csv*, with the addition of extra columns equivalent to various thresholds (see script). Lastly, **/out** contains the output files from the Shiny App (e.g., *output_k5*). The Shiny App is used to extract groups of topics satisfying certain criteria (see below), and classify the remaining groups as 'unextracted'. The file is structured as */data/rawdata.csv* with the addition of an *extract* variable denoting each topic's group membership
 
 ## Description of App
+
+Executing **/script/topicalignment.R** will produce a Shiny App displaying the results from Andreotta et al. The app allows users to interact with the data set by altering the parameters for grouping. As seen below, the user may alter three parameters: (1) the topic model examined (5, 10, or 20 topics per batch), (2) the minimum criteria for matching topics, below which topics are deemed too dissimilar to be grouped, and (3) the number of groups the user would like to extract from the grouping output (the groups containing the most topics will be extracted, the volume of tweets in groups is used to resolve ties). The remaining options allow users to save their output, as well as alter the display of the app (relevant for the third tab, "Summary of aligned topics")
+
+![](img/tab1.PNG)
+
+The first of three tabs ("Topics") in the app allows users to browse the data set. The second tab ("Alignment of topics across batches") allows users to view the alignment of topics corresponding to their parameter selection. On the horizontal axis are the batches. Each square represents a topic in the data set. Squares in pink have been aligned, whereas squares in grey did not satisfy the criteria for alignment ('unextracted'). The groupings are ordered according to the number of topics aligned, and are shown on the vertical axis (from 1 to the number of groups extracted, after which unextracted topics are shown in grey). If the number of groups extracted is changed, the figure will adapt accordingly:
+
+![](img/tab2_1.PNG)
+
+![](img/tab2_2.PNG)
+
+Lastly, the final tab "Summary of aligned topics" presents a tabulated summary of the aligned topics. Each row of this table is a group of topics classified as similar by the algorithm. *Grouping ID* contains a unique ID for each group of topics. *Topics in Group* is the number of topics in each group. *Volume of tweets* is the total number of tweets belonging to a group of topics. *Volume of tweets (%)* expresses volume as a percentage of the total corpus. *Prominent Keywords* contains keywords shared between the topics grouped. Users can alter the definition of 'prominent' through the slider "Proportion of times a keyword must occur in aligned topics to be displayed in summary". If set at 0, all keywords belonging to all topics in each group will be shown. If set to 1, only keywords shared between all topics in a group will be displayed (see below).
+
+The proportion of the corpus covered by extracted groupings is indicated above the table in a sentence form.
+
+![](img/tab/3_1.PNG)
+
+![](img/tab/3_3.PNG)
+
+A variety of display options exist for users wishing to see more information (see below). Users can hide the keyword and volume columns of the table by switching off the corresponding buttons. Users wishing to see the specific topics aligned can activate the button: "Show topics in summary". Users can view the batches which correspond to a given grouping by activating "Show batches in summary". Lastly, users can view the results of all groupings (including ones classified as unextracted) by activating the "Show unextracted in summary" button. This option adds an "Extraction ID" to the table, where alignments are given the ID corresponding to the figure on the second tab. Unextracted alignments are allocated an ID of 0.
+
+![](img/tab/3_2.PNG)
