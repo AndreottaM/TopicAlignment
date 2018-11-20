@@ -4,7 +4,7 @@
 
 This repository houses data and scripts from Andreotta, Nugroho, Hurlstone, Boschetti, Farrell, Walker, and Paris study on Australian climate change tweets. This research was preregistered on the Open Science Framework under the project "Examining Australian Climate Change Discourse Through a Social Media Lens 1.1", <https://osf.io/mb8kh/>.  The scripts contain an algorithm to align topics, based on the work of Chuang et al. (2015). Identifies similar topics that occur across separate executions of the same topic modeling algorithm (i.e., topics that reproduce). See Chuang et al. (2015) for more detail.
 
-The scripts are coded in R (version 3.5.0; R Core Team, 2018) using RStudio (version 1.1.453; RStudio Team, 2016) for Windows 10. Several packages were used to complete these scripts: tidyverse (version 1.2.1; Wickham, 2017), shiny (version 1.1.0; Chang, Cheng, Allaire, Xie, & McPherson, 2018), shinyWidgets (version 0.4.3, Perrier, Meyer, & Granjon, 2018), DT (version 0.4; Xie, 2018), and xml2 (version 1.2.0, Wickham, Hester, & Ooms, 2018).
+The scripts are coded in R (version 3.5.0; R Core Team, 2018) using RStudio (version 1.1.453; RStudio Team, 2016) for Windows 10. Several packages were used to complete these scripts: tidyverse (version 1.2.1; Wickham, 2017), shiny (version 1.1.0; Chang, Cheng, Allaire, Xie, & McPherson, 2018), shinyWidgets (version 0.4.3; Perrier, Meyer, & Granjon, 2018), DT (version 0.4; Xie, 2018), and xml2 (version 1.2.0; Wickham, Hester, & Ooms, 2018).
 
 The script deploys a Shiny App to display the aligned topics. The app can be used to explore the impact of various parameters of this process. See below for more detail.
 
