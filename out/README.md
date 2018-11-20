@@ -1,0 +1,3 @@
+#TopicAlignment/out
+
+**/out** contains .csv of similarity matrices (for each *topicsperbatch*) and .csv output for topic alignment algorithm (for each *topicsperbatch*). The topic alignment output is structured as */data/rawdata.csv*, with the addition of extra columns equivalent to various thresholds (see script). Lastly, **/out** contains the output files from the Shiny App (e.g., *output_k5*). The Shiny App is used to extract groups of topics satisfying certain criteria (see below), and classify the remaining groups as 'ungrouped'. The file is structured as */data/rawdata.csv* with the addition of an *extract* variable denoting each topic's group membership
