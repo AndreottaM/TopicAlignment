@@ -438,7 +438,7 @@ ui <- fluidPage(
 
     mainPanel(
       tabsetPanel(type = "tabs",
-                  tabPanel("Debug", textOutput(outputId = "textTest"), dataTableOutput(outputId = "tableTest")),
+                  #tabPanel("Debug", textOutput(outputId = "textTest"), dataTableOutput(outputId = "tableTest")),
                   tabPanel("Topics", DT::dataTableOutput(outputId = "topicTable")),
                   tabPanel("Alignment of topics across batches", plotOutput(outputId = "topicImage")),
                   tabPanel("Summary of aligned topics", textOutput(outputId = "groupText"), DT::dataTableOutput(outputId = "groupTable"))
@@ -537,9 +537,9 @@ server <- function(input, output) {
       write_delim(path = paste0(datapath, "output_k", as.character(gpara$k), '.csv'), delim = ",")
   })
 
-
-  output$textTest <- renderText({as.character(rpara$showunext)})
-  output$tableTest <- renderDataTable({res$topics})
+#These were for debugging purposes
+#  output$textTest <- renderText({as.character(rpara$showunext)})
+#  output$tableTest <- renderDataTable({res$topics})
 
   output$topicTable <- DT::renderDataTable({
     #Renders a datatable of topics and keywords
