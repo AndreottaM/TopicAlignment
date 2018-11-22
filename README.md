@@ -2,7 +2,7 @@
 
 ## Description
 
-This repository houses data and scripts from Andreotta, Nugroho, Hurlstone, Boschetti, Farrell, Walker, and Paris study on Australian climate change tweets. This research was preregistered on the Open Science Framework under the project "Examining Australian Climate Change Discourse Through a Social Media Lens 1.1", <https://osf.io/mb8kh/>.  The scripts contain an algorithm to align topics, based on the work of Chuang et al. (2015). Identifies similar topics that occur across separate executions of the same topic modeling algorithm (i.e., topics that reproduce). See Chuang et al. (2015) for more detail.
+This repository houses data and scripts from Andreotta, Nugroho, Hurlstone, Boschetti, Farrell, Walker, and Paris study on Australian climate change tweets. This research was preregistered on the Open Science Framework under the project "Examining Australian Climate Change Discourse Through a Social Media Lens 1.1", <https://osf.io/mb8kh/>. For those interested in the topics derived by Andreotta et al., please refer to [**/data**](/data/rawdata.csv). For those interested in the alignment of topics, please refer to [**/out**](/out). The scripts contain an algorithm to align topics, based on the work of Chuang et al. (2015). Identifies similar topics that occur across separate executions of the same topic modeling algorithm (i.e., topics that reproduce). See Chuang et al. (2015) for more detail.
 
 The scripts are coded in R (version 3.5.0; R Core Team, 2018) using RStudio (version 1.1.453; RStudio Team, 2016) for Windows 10. Several packages were used to complete these scripts: tidyverse (version 1.2.1; Wickham, 2017), shiny (version 1.1.0; Chang, Cheng, Allaire, Xie, & McPherson, 2018), shinyWidgets (version 0.4.3; Perrier, Meyer, & Granjon, 2018), DT (version 0.4; Xie, 2018), and xml2 (version 1.2.0; Wickham, Hester, & Ooms, 2018).
 
@@ -36,6 +36,8 @@ Xie, Y. (2018). DT: A Wrapper of the JavaScript Library 'DataTables'. R package 
 **/script** contains two scripts. First, *topicalignment.R* is used to detect the similarities between topics (though, these can be manually entered as .csv in **/out**), group topics according to levels of similarity (these results are stored in **/out**), and deploy an Shiny App to explore/refine results. The second script is *extractIDs.R*, demonstrating how Andreotta et al. extracted tweets from each group of topics. The data file of tweet IDs is not provided due to ethical obligations.
 
 **/out** contains .csv of _similarity matrices_ (for each *topicsperbatch*) and .csv output for topic alignment algorithm (for each *topicsperbatch*). The _topic alignment output_ is structured as */data/rawdata.csv*, with the addition of extra columns equivalent to various thresholds (G3 = similarity threshold of 0.3 as per Andreotta et al., see script for more information). Lastly, **/out** contains the _output files from the Shiny App_ (e.g., *output_k5*). The Shiny App is used to extract groups of topics satisfying certain criteria (see below), and classify the remaining groups as 'unextracted' (i.e., extract = 0). The file is structured as */data/rawdata.csv* with the addition of an *extract* variable denoting each topic's group membership
+
+**/img** contains a set of images for README files.
 
 ## Description of App
 
