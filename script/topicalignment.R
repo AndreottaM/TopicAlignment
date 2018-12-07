@@ -6,6 +6,7 @@ library(DT)
 
 
 #Code is based on Chuang's algorithm, but instead of cosine similarity of topic words, we use keywords.
+#Grouping has additional contraint: groups cannot be merged if mean similarity between topics < 0.3
 #First calculate similarity between topics
 #Second group similar topics
 #Third display this similarity
@@ -298,6 +299,9 @@ calculate_grouping <- function(k, func.me, th.me){
     df.s[ , t.grouped[-1]] <- 0
     df.s[t.grouped[-1], ] <- 0
     #Update locations + respective closeness
+    #Now update location and closeness appropriately
+    #Keep only the first reference of topic, change others to NA
+    #Check which groupings need updating, and update these
     df.r <- df.r %>%
       rowwise %>%
       mutate(location = ifelse(group == g.remain,
@@ -328,7 +332,7 @@ calculate_grouping <- function(k, func.me, th.me){
   write_delim(as.data.frame(df.r), path = paste0(datapath, name.group, as.character(k), '.csv'), delim = ",")
   df.r %>% return()
 }
-
+#Calculate all groupings
 df.g <- df.t %>%
   pull(topicsperbatch) %>%
   unique %>%
